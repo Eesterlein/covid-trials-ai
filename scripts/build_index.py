@@ -26,7 +26,6 @@ def main():
         "chunk_id": [c["chunk_id"] for c in chunks],
         "source": [c["source"] for c in chunks],
         "ncts": [c["ncts"] for c in chunks],
-        "nct_text": [" ".join(c["ncts"]) for c in chunks],  # so keyword search can match trial IDs
         "pmcid": [c["pmcid"] or "" for c in chunks],
         "doc_title": [c["doc_title"] for c in chunks],
         "section": [c["section"] for c in chunks],
@@ -34,10 +33,12 @@ def main():
         "license": [c["license"] for c in chunks],
         "retracted": [c["retracted"] for c in chunks],
         "text": [c["text"] for c in chunks],
+        # one combined column for keyword search, so titles, sections and trial IDs match too
+        "search_text": [f"{c['doc_title']} {c['section']} {' '.join(c['ncts'])} {c['text']}" for c in chunks],
         "vector": pa.FixedSizeListArray.from_arrays(pa.array(vecs.ravel(), pa.float32()), vecs.shape[1]),
     })
     tbl = db.create_table("chunks", table, mode="overwrite")
-    tbl.create_fts_index(["text", "doc_title", "section", "nct_text"], replace=True)
+    tbl.create_fts_index("search_text", replace=True)
     for col in ("source", "pmcid", "retracted"):
         tbl.create_scalar_index(col, replace=True)
 
