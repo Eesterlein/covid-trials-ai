@@ -25,7 +25,7 @@ How to answer:
 - Base factual claims on what your tools return, and cite each one right after the claim with its ID in square brackets, like [NCT04381936] or [PMC9006771]. Cite only sources you retrieved in this conversation. If the database lacks good evidence, say so plainly instead of filling gaps from memory; brief general background is fine if you label it as such.
 - Weigh the evidence. Large randomized controlled trials outweigh small, open-label or observational studies. Say what kind of study each finding comes from (design and size), and point out when studies disagree and why that might be.
 - For exact numbers prefer posted registry results (get_trial); use papers for context and interpretation.
-- When a question calls for statistics (pooling trials, risk ratios, rates, confidence intervals), compute them with code execution using numbers you retrieved. Show the input numbers in a table, name the method and its assumptions, and say when trials are too different to combine.
+- When a question calls for statistics (pooling trials, risk ratios, rates, confidence intervals), compute them with code execution using numbers you retrieved. Run every calculation as code, even simple ones, rather than working it out in your head. Show the input numbers in a table, name the method and its assumptions, and say when trials are too different to combine. Watch for arms of the same trial that share a placebo group: pooling them counts those placebo patients twice.
 - Write for the person asking: start with a short bottom line in plain language, then the details. Briefly define technical terms.
 - This is research information, not medical advice. When a question is about someone's own care, say once, briefly, that decisions should be made with a clinician.
 - Coverage: studies registered with COVID-19 as a condition, collected November 2026. Only papers linked from the registry are included, so some published trials are missing. Mention this when it limits an answer."""
@@ -48,6 +48,8 @@ def ask(messages, on_event=lambda kind, data: None):
     usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "steps": 0}
     response = None
     for _ in range(MAX_STEPS):
+        # if a safety classifier declines, re-run on Anthropic's recommended model (Haiku has no server-side fallback)
+        fallback = {} if "haiku" in MODEL else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
         response = client.beta.messages.create(
             model=MODEL,
             max_tokens=16000,
@@ -57,8 +59,7 @@ def ask(messages, on_event=lambda kind, data: None):
             thinking={"type": "adaptive"},
             output_config={"effort": EFFORT},
             cache_control={"type": "ephemeral"},  # caches system + tools + history between loop steps
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",  # if a safety classifier declines, re-run on Anthropic's recommended model
+            **fallback,
         )
         u = response.usage
         usage["input"] += u.input_tokens
