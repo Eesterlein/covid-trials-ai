@@ -43,8 +43,19 @@ def main():
         tbl.create_scalar_index(col, replace=True)
 
     trials = json.loads((DATA / "trials.json").read_text())
-    db.create_table("trials", trials, mode="overwrite")
-    print(f"chunks table: {tbl.count_rows()} rows | trials table: {len(trials)} rows")
+    db.create_table("trials", trials, mode="overwrite").create_scalar_index("nct", replace=True)
+
+    # full registry record per trial (arms, outcomes, posted results) for the get_trial tool
+    details = []
+    for f in sorted(glob.glob(str(DATA / "raw" / "page_*.json"))):
+        for s in json.load(open(f)):
+            p = s["protocolSection"]
+            keep = {k: p[k] for k in ("armsInterventionsModule", "outcomesModule") if k in p}
+            if "resultsSection" in s:
+                keep["resultsSection"] = s["resultsSection"]
+            details.append({"nct": p["identificationModule"]["nctId"], "record": json.dumps(keep)})
+    db.create_table("details", details, mode="overwrite").create_scalar_index("nct", replace=True)
+    print(f"chunks table: {tbl.count_rows()} rows | trials table: {len(trials)} rows | details: {len(details)} rows")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 """Hybrid search over the chunks table: MedCPT vector similarity + keyword (BM25),
-merged with reciprocal rank fusion. Retracted papers are excluded by default.
+merged with reciprocal rank fusion, then reranked by the MedCPT cross-encoder.
+Retracted papers and eligibility criteria are excluded by default.
 
-Usage:  python scripts/search.py "does ivermectin reduce hospitalization"
+Try it:  python -m app.retrieval "does ivermectin reduce hospitalization"
 """
 import pathlib
 import sys
@@ -42,8 +43,18 @@ def rerank(q, rows):
 DEFAULT_WHERE = "retracted = false AND section != 'Eligibility'"
 
 
+_db = None
+
+
+def db():
+    global _db
+    if _db is None:
+        _db = lancedb.connect(str(ROOT / "data" / "lancedb"))
+    return _db
+
+
 def search(q, k=10, where=DEFAULT_WHERE, pool=50, rerank_top=30):
-    tbl = lancedb.connect(str(ROOT / "data" / "lancedb")).open_table("chunks")
+    tbl = db().open_table("chunks")
     cols = ["chunk_id", "source", "ncts", "pmcid", "doc_title", "section", "year", "license", "text"]
     vec_hits = (tbl.search(embed_query(q), vector_column_name="vector").metric("dot")
                 .where(where, prefilter=True).select(cols).limit(pool).to_list())
