@@ -6,6 +6,7 @@ Try it:  python -m app.retrieval "does ivermectin reduce hospitalization"
 """
 import pathlib
 import sys
+import threading
 
 import lancedb
 import torch
@@ -15,13 +16,24 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 QUERY_MODEL = "ncbi/MedCPT-Query-Encoder"
 RERANK_MODEL = "ncbi/MedCPT-Cross-Encoder"
 _tok = _model = _rtok = _rmodel = None
+_load_lock = threading.Lock()
+
+
+def load_models():
+    """Load the query encoder and reranker once. Safe to call from many threads:
+    concurrent first-time loads otherwise corrupt each other (meta-device tensor errors)."""
+    global _tok, _model, _rtok, _rmodel
+    with _load_lock:
+        if _model is None:
+            _tok = AutoTokenizer.from_pretrained(QUERY_MODEL)
+            _model = AutoModel.from_pretrained(QUERY_MODEL).eval()
+        if _rmodel is None:
+            _rtok = AutoTokenizer.from_pretrained(RERANK_MODEL)
+            _rmodel = AutoModelForSequenceClassification.from_pretrained(RERANK_MODEL).eval()
 
 
 def embed_query(q):
-    global _tok, _model
-    if _model is None:
-        _tok = AutoTokenizer.from_pretrained(QUERY_MODEL)
-        _model = AutoModel.from_pretrained(QUERY_MODEL).eval()
+    load_models()
     enc = _tok([q], truncation=True, padding=True, max_length=64, return_tensors="pt")
     with torch.no_grad():
         return _model(**enc).last_hidden_state[0, 0, :].numpy()
@@ -29,10 +41,7 @@ def embed_query(q):
 
 def rerank(q, rows):
     """Score each (question, passage) pair together with the MedCPT cross-encoder."""
-    global _rtok, _rmodel
-    if _rmodel is None:
-        _rtok = AutoTokenizer.from_pretrained(RERANK_MODEL)
-        _rmodel = AutoModelForSequenceClassification.from_pretrained(RERANK_MODEL).eval()
+    load_models()
     pairs = [[q, f"{r['doc_title']} | {r['section']} | {r['text']}"] for r in rows]
     enc = _rtok(pairs, truncation=True, padding=True, max_length=512, return_tensors="pt")
     with torch.no_grad():

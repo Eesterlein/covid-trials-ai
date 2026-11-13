@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import anthropic
 
 from app.agent import SYSTEM, ask, cost
+from app.retrieval import load_models
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FLOW = ROOT / ".claude" / "hillclimb" / "covid-qa"
@@ -93,6 +94,9 @@ def run_case(case, model):
     invalid = sorted(c for c in cited if c not in tool_text)
     code_runs = sum(1 for t in trace if t["role"] == "tool_call" and "code_execution" in t["name"])
     tool_calls = sum(1 for t in trace if t["role"] == "tool_call")
+    tool_errors = sum(1 for t in trace if t["role"] == "tool_result" and t["content"].startswith("Tool error"))
+    if tool_errors:  # our tools broke, so the answer measures the harness, not the model
+        raise RuntimeError(f"{tool_errors} tool errors in transcript")
 
     verdict, judge_usage, judge_model = judge(case, answer)
     scores = {k: verdict[k]["score"] for k in ("correct", "honest_gaps", "weighs_evidence", "plain_language")}
@@ -141,6 +145,7 @@ def main():
     cases = [c for c in CASES if (not args.cases or c["id"] in args.cases.split(",")) and c["id"] not in done]
     print(f"{args.variant} / {args.model}: {len(cases)} cases to run ({len(done)} already done)")
 
+    load_models()  # before threads start
     pool = ThreadPoolExecutor(args.concurrency)
     futures = {c["id"]: (c, pool.submit(run_case, c, args.model), time.time()) for c in cases}
     for cid, (case, fut, start) in futures.items():
