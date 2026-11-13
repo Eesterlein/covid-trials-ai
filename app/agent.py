@@ -43,21 +43,22 @@ def _run_tool(block):
         return {"type": "tool_result", "tool_use_id": block.id, "content": f"Tool error: {e}", "is_error": True}
 
 
-def ask(messages, on_event=lambda kind, data: None):
+def ask(messages, on_event=lambda kind, data: None, model=None, effort=None):
     """Run one user turn. `messages` must end with the user's message; it is extended in place."""
-    usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "steps": 0}
+    model, effort = model or MODEL, effort or EFFORT
+    usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "steps": 0, "served_model": None}
     response = None
     for _ in range(MAX_STEPS):
         # if a safety classifier declines, re-run on Anthropic's recommended model (Haiku has no server-side fallback)
-        fallback = {} if "haiku" in MODEL else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+        fallback = {} if "haiku" in model else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
         response = client.beta.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=16000,
             system=SYSTEM,
             tools=TOOLS + SERVER_TOOLS,
             messages=messages,
             thinking={"type": "adaptive"},
-            output_config={"effort": EFFORT},
+            output_config={"effort": effort},
             cache_control={"type": "ephemeral"},  # caches system + tools + history between loop steps
             **fallback,
         )
@@ -67,6 +68,7 @@ def ask(messages, on_event=lambda kind, data: None):
         usage["cache_read"] += u.cache_read_input_tokens or 0
         usage["cache_write"] += u.cache_creation_input_tokens or 0
         usage["steps"] += 1
+        usage["served_model"] = response.model
         messages.append({"role": "assistant", "content": response.content})
 
         for b in response.content:
