@@ -17,7 +17,7 @@ load_dotenv(ROOT / ".env")
 
 MODEL = os.environ.get("MODEL", "claude-haiku-5-5")  # chosen from the 2026-11-12 eval: 19/20 correct at ~$0.004/question
 EFFORT = os.environ.get("EFFORT", "medium")
-MAX_STEPS = 15  # model calls per user turn
+MAX_STEPS = 8  # model calls per user turn (caps cost per question)
 
 SYSTEM = """You are COVID Trials AI, a research assistant that answers questions about COVID-19 from a database of 10,269 ClinicalTrials.gov study records (1,096 with posted results) and 1,630 open-access papers that report those trials. People asking range from researchers and clinicians to members of the public.
 
@@ -49,9 +49,12 @@ def ask(messages, on_event=lambda kind, data: None, model=None, effort=None):
     model, effort = model or MODEL, effort or EFFORT
     usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "steps": 0, "served_model": None}
     response = None
-    for _ in range(MAX_STEPS):
+    for step in range(MAX_STEPS):
         # if a safety classifier declines, re-run on Anthropic's recommended model (Haiku has no server-side fallback)
         fallback = {} if "haiku" in model else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+        # on the last allowed step, no more tool calls: answer from what has been found so far
+        # (also keeps the history valid - it never ends on an unanswered tool call)
+        last = {"tool_choice": {"type": "none"}} if step == MAX_STEPS - 1 else {}
         response = client.beta.messages.create(
             model=model,
             max_tokens=16000,
@@ -62,6 +65,7 @@ def ask(messages, on_event=lambda kind, data: None, model=None, effort=None):
             output_config={"effort": effort},
             cache_control={"type": "ephemeral"},  # caches system + tools + history between loop steps
             **fallback,
+            **last,
         )
         u = response.usage
         usage["input"] += u.input_tokens

@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COVID Trials AI</title>
+<meta name="description" content="Ask questions about COVID-19 and get answers drawn from 10,269 clinical trial records and 1,630 open-access papers, with every claim cited.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+<style>
+:root {
+  --bg: #f6f7f5; --surface: #ffffff; --surface-2: #eef1ee; --text: #1c2321; --muted: #5d6965;
+  --line: #dde3df; --accent: #0f6e66; --accent-soft: #e2f0ee; --accent-text: #ffffff;
+  --user: #0f6e66; --warn-bg: #fff6e5; --warn: #8a5a00; --code-bg: #f1f3f2;
+  --radius: 14px; --shadow: 0 1px 2px rgba(20, 30, 28, .06), 0 4px 16px rgba(20, 30, 28, .05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111615; --surface: #19201e; --surface-2: #212a28; --text: #e6ecea; --muted: #9aa8a4;
+    --line: #2c3633; --accent: #4fb3a8; --accent-soft: #1d3330; --accent-text: #0d1312;
+    --user: #2f8f85; --warn-bg: #2d2412; --warn: #f0c060; --code-bg: #141a19;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111615; --surface: #19201e; --surface-2: #212a28; --text: #e6ecea; --muted: #9aa8a4;
+  --line: #2c3633; --accent: #4fb3a8; --accent-soft: #1d3330; --accent-text: #0d1312;
+  --user: #2f8f85; --warn-bg: #2d2412; --warn: #f0c060; --code-bg: #141a19; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15.5px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+
+header { padding: 40px 0 8px; }
+h1 { font-family: "Source Serif 4", Georgia, serif; font-weight: 600; font-size: clamp(28px, 5vw, 38px); line-height: 1.15; margin: 0 0 10px; letter-spacing: -.01em; }
+.tagline { color: var(--muted); margin: 0 0 18px; max-width: 640px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+.stats li { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+.stats b { color: var(--text); font-weight: 600; }
+
+.examples { margin: 22px 0 6px; }
+.examples h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+.examples h2 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+#chat { display: flex; flex-direction: column; gap: 18px; padding: 18px 0 24px; min-height: 40px; }
+.msg-user { align-self: flex-end; max-width: 85%; background: var(--user); color: #fff; padding: 10px 14px; border-radius: var(--radius) var(--radius) 4px var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-bot { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.badge { display: inline-block; font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 2px 10px; margin-bottom: 10px; }
+
+.answer > :first-child { margin-top: 0; }
+.answer > :last-child { margin-bottom: 0; }
+.answer h1, .answer h2, .answer h3 { font-family: Inter, system-ui, sans-serif; font-size: 16px; font-weight: 600; margin: 20px 0 6px; }
+.answer p { margin: 0 0 12px; }
+.answer ul, .answer ol { margin: 0 0 12px; padding-left: 22px; }
+.answer li { margin: 3px 0; }
+.answer strong { font-weight: 600; }
+.table-wrap { overflow-x: auto; margin: 8px 0 14px; border: 1px solid var(--line); border-radius: 10px; }
+.answer table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.answer th, .answer td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.answer th { background: var(--surface-2); font-weight: 600; }
+.answer tr:last-child td { border-bottom: 0; }
+.answer code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+.answer pre { background: var(--code-bg); padding: 12px; border-radius: 10px; overflow-x: auto; }
+.answer pre code { background: none; padding: 0; }
+a.cite { display: inline-block; font-size: 12px; font-weight: 500; line-height: 1.5; padding: 0 7px; margin: 0 1px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.cite:hover { background: var(--accent); color: var(--accent-text); }
+.answer a:not(.cite) { color: var(--accent); }
+
+.status { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
+.status .step { display: flex; gap: 8px; align-items: baseline; }
+.status .step::before { content: "✓"; color: var(--accent); font-weight: 600; flex: none; }
+.status .step.live::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; transform-origin: center; align-self: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status .step.live::before { animation: none; } }
+
+details.how { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 14px; }
+details.how summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+details.how ol { margin: 10px 0 0; padding-left: 22px; color: var(--muted); }
+details.how li { margin: 6px 0; }
+details.how pre { background: var(--code-bg); color: var(--text); font-size: 12.5px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+.notice { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+
+.composer-wrap { position: sticky; bottom: 0; background: linear-gradient(to top, var(--bg) 75%, transparent); padding: 14px 0 16px; }
+form { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 10px 10px 14px; display: flex; gap: 10px; align-items: flex-end; }
+form:focus-within { border-color: var(--accent); }
+textarea { flex: 1; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: inherit; min-height: 26px; max-height: 160px; padding: 4px 0; }
+textarea::placeholder { color: var(--muted); }
+button.send { flex: none; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+button.send:disabled { opacity: .45; cursor: default; }
+.meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); padding: 6px 4px 0; }
+.meta button { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
+#turnstile { margin-top: 8px; }
+
+footer { border-top: 1px solid var(--line); margin-top: 8px; padding: 18px 0 36px; font-size: 13px; color: var(--muted); }
+footer p { margin: 0 0 8px; }
+footer a { color: var(--accent); }
+@media (max-width: 560px) {
+  header { padding-top: 28px; }
+  .msg-bot { padding: 14px; }
+  .msg-user { max-width: 92%; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>COVID Trials AI</h1>
+    <p class="tagline">Ask a question about COVID-19 treatments, vaccines or prevention. The answer is drawn from registered clinical trials and the papers that report them, with every claim linked to its source.</p>
+    <ul class="stats">
+      <li><b>10,269</b> trial records</li>
+      <li><b>1,096</b> with posted results</li>
+      <li><b>1,630</b> full-text papers</li>
+      <li>Statistics computed in code</li>
+    </ul>
+  </header>
+
+  <section class="examples" aria-labelledby="ex-h">
+    <h2 id="ex-h">Try an example <span>(instant, pre-answered)</span></h2>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <main id="chat" aria-live="polite"></main>
+
+  <div class="composer-wrap">
+    <form id="form">
+      <label for="q" class="sr-only" style="position:absolute;left:-9999px">Your question</label>
+      <textarea id="q" rows="1" maxlength="500" placeholder="Ask about a COVID-19 treatment, vaccine or trial…"></textarea>
+      <button class="send" id="send" type="submit">Ask</button>
+    </form>
+    <div id="turnstile"></div>
+    <div class="meta"><span id="quota"></span><span><span id="count">0</span>/500 · <button type="button" id="new">New conversation</button></span></div>
+  </div>
+
+  <footer>
+    <p><b>Research information, not medical advice.</b> Answers can contain mistakes; check the linked sources, and talk with a clinician about your own care.</p>
+    <p>Data: <a href="https://clinicaltrials.gov" target="_blank" rel="noopener">ClinicalTrials.gov</a> records with COVID-19 as a condition and open-access papers from <a href="https://pmc.ncbi.nlm.nih.gov" target="_blank" rel="noopener">PubMed Central</a>, collected November 2026. Only papers linked from a trial's registry entry are included, so some published trials are missing.</p>
+    <p>Answers by <span id="model-name">Claude Haiku 5.5</span>; examples by Claude Opus 5.5. A portfolio project by <a href="https://eesterlein.github.io" target="_blank" rel="noopener">Elissa Esterlein</a>.</p>
+  </footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const chat = $("#chat"), form = $("#form"), q = $("#q"), send = $("#send");
+let busy = false, turnstileToken = null;
+
+// ---------- rendering ----------
+const CITE = /\[((?:NCT\d{8}|PMC\d{5,9})(?:\s*[,;]\s*(?:NCT\d{8}|PMC\d{5,9}))*)\]/g;
+function citeLinks(md) {
+  return md.replace(CITE, (_, ids) => ids.split(/\s*[,;]\s*/).map((id) => {
+    const url = id.startsWith("NCT") ? `https://clinicaltrials.gov/study/${id}` : `https://pmc.ncbi.nlm.nih.gov/articles/${id}/`;
+    return `<a class="cite" href="${url}" title="Open ${id}">${id}</a>`;
+  }).join(" "));
+}
+DOMPurify.addHook("afterSanitizeAttributes", (n) => { if (n.tagName === "A") { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener"); } });
+function renderMarkdown(md) {
+  const html = DOMPurify.sanitize(marked.parse(citeLinks(md || "")));
+  const div = document.createElement("div");
+  div.className = "answer";
+  div.innerHTML = html;
+  div.querySelectorAll("table").forEach((t) => { const w = document.createElement("div"); w.className = "table-wrap"; t.replaceWith(w); w.appendChild(t); });
+  return div;
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function stepLabel(ev) {
+  if (ev.type === "code") return "Running statistics in Python";
+  const { name, input = {} } = ev.data || ev;
+  if (name === "search_evidence") {
+    const where = input.source === "paper" ? "papers" : input.source === "registry" ? "trial records" : "trials and papers";
+    return `Searching ${where}: “${input.query}”` + (input.nct ? ` in ${input.nct}` : "");
+  }
+  if (name === "find_trials") {
+    const bits = [input.text && `“${input.text}”`, input.phase, input.randomized && "randomized", input.has_results && "with results"].filter(Boolean);
+    return "Listing trials" + (bits.length ? ` ${bits.join(", ")}` : "");
+  }
+  if (name === "get_trial") return `Reading trial ${input.nct}` + (input.outcome_filter ? ` (${input.outcome_filter} results)` : "");
+  return `Using ${name}`;
+}
+function codeText(data) { return (data && (data.command || data.code || data.file_text)) || JSON.stringify(data, null, 2); }
+
+function howPanel(steps) {
+  const d = el("details", "how");
+  d.appendChild(el("summary", null, `How I found this (${steps.length} step${steps.length === 1 ? "" : "s"})`));
+  const ol = el("ol");
+  for (const s of steps) {
+    const li = el("li", null, s.label);
+    if (s.code) { li.appendChild(el("pre", null, s.code)); }
+    if (s.output) { li.appendChild(el("div", null, "Output:")); li.appendChild(el("pre", null, s.output)); }
+    ol.appendChild(li);
+  }
+  d.appendChild(ol);
+  return d;
+}
+
+// ---------- examples (static, free) ----------
+fetch("/static/examples.json").then((r) => r.json()).then((examples) => {
+  for (const ex of examples) {
+    const b = el("button", "chip", ex.question);
+    b.type = "button";
+    b.onclick = () => {
+      chat.appendChild(el("div", "msg-user", ex.question));
+      const box = el("div", "msg-bot");
+      box.appendChild(el("span", "badge", "Pre-answered by Claude Opus 5.5"));
+      box.appendChild(renderMarkdown(ex.answer));
+      const steps = ex.steps.map((s) => ({
+        label: s.tool.includes("code_execution") ? "Running statistics in Python" : stepLabel({ data: { name: s.tool, input: s.input } }),
+        code: s.tool.includes("code_execution") ? codeText(s.input) : null, output: s.output || null }));
+      if (steps.length) box.appendChild(howPanel(steps));
+      chat.appendChild(box);
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    $("#chips").appendChild(b);
+  }
+});
+
+// ---------- status / limits ----------
+async function refreshStatus() {
+  const s = await fetch("/api/status").then((r) => r.json());
+  $("#quota").textContent = s.open ? `${s.remaining_today} question${s.remaining_today === 1 ? "" : "s"} left today` : "Today's demo limit is reached; examples still work";
+  if (s.turnstile_site_key && !window.turnstileLoaded) {
+    window.turnstileLoaded = true;
+    window.onTurnstile = () => turnstile.render("#turnstile", { sitekey: s.turnstile_site_key, appearance: "interaction-only", callback: (t) => { turnstileToken = t; } });
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstile&render=explicit";
+    sc.async = true; document.head.appendChild(sc);
+  }
+}
+refreshStatus();
+
+// ---------- asking ----------
+q.addEventListener("input", () => { $("#count").textContent = q.value.length; q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 160) + "px"; });
+q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+$("#new").onclick = async () => { await fetch("/api/reset", { method: "POST" }); chat.innerHTML = ""; refreshStatus(); };
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = q.value.trim();
+  if (!text || busy) return;
+  busy = true; send.disabled = true;
+  q.value = ""; q.dispatchEvent(new Event("input"));
+  chat.appendChild(el("div", "msg-user", text));
+  const box = el("div", "msg-bot"), status = el("div", "status");
+  const thinking = el("div", "step live", "Reading the question…");
+  status.appendChild(thinking); box.appendChild(status); chat.appendChild(box);
+  box.scrollIntoView({ behavior: "smooth", block: "end" });
+  const steps = [];
+  let live = thinking;
+  const addStep = (label) => { live.classList.remove("live"); live = el("div", "step live", label); status.appendChild(live); };
+
+  try {
+    const resp = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, turnstile_token: turnstileToken }) });
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!line.startsWith("data: ")) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (ev.type === "tool") { const label = stepLabel(ev); steps.push({ label }); addStep(label); }
+        else if (ev.type === "code") { steps.push({ label: "Running statistics in Python", code: codeText(ev.data) }); addStep("Running statistics in Python"); }
+        else if (ev.type === "code_result") { const s = [...steps].reverse().find((x) => x.code); if (s) s.output = String(ev.data).slice(0, 3000); }
+        else if (ev.type === "answer") {
+          status.remove();
+          box.appendChild(renderMarkdown(ev.text));
+          if (steps.length) box.appendChild(howPanel(steps));
+        } else if (ev.type === "error") {
+          status.remove();
+          box.appendChild(el("div", "notice", ev.message));
+          if (ev.reason === "human" && window.turnstile) turnstile.reset();
+        }
+      }
+    }
+  } catch (err) {
+    status.remove();
+    box.appendChild(el("div", "notice", "Couldn't reach the server. Please try again."));
+  } finally {
+    busy = false; send.disabled = false; refreshStatus();
+  }
+});
+</script>
+</body>
+</html>
