@@ -1,0 +1,12 @@
+# torch is installed separately in the Dockerfile (CPU-only wheel); locally it comes from the system site-packages
+anthropic==2.8.0
+python-dotenv==1.2.4
+lancedb==0.41.0
+pyarrow==20.0.0
+numpy==1.26.4
+transformers==4.57.3
+fastapi==0.163.1
+uvicorn==0.54.0
+httpx==0.28.1
+lxml==4.9.3
+huggingface_hub==0.36.0

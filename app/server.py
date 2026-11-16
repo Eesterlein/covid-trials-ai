@@ -13,6 +13,7 @@ import copy
 import json
 import os
 import queue
+import re
 import secrets
 import threading
 import time
@@ -41,8 +42,16 @@ def _warm():
     threading.Thread(target=load_models, daemon=True).start()  # first question shouldn't wait for model loading
 
 
+SID_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
+
+
 def _sid(request):
-    return request.cookies.get("sid") or secrets.token_urlsafe(18)
+    """Visitor session id. The page sends one from localStorage in a header, because cookies
+    are often blocked when the app is shown inside another site's frame (as on Hugging Face)."""
+    for v in (request.headers.get("x-session-id"), request.cookies.get("sid")):
+        if v and SID_RE.match(v):
+            return v
+    return secrets.token_urlsafe(18)
 
 
 def _ip(request):
@@ -102,6 +111,7 @@ MESSAGES = {
     "busy": "A few people are asking questions right now. Please try again in a minute.",
     "human": "Please complete the quick human check, then ask again.",
     "too_long": f"Please keep questions under {MAX_CHARS} characters.",
+    "empty": "Please type a question.",
     "turns": "This conversation is at its length limit. Start a new conversation to keep asking.",
 }
 
@@ -117,7 +127,9 @@ async def chat(request: Request):
         return _with_cookie(StreamingResponse(iter([_sse({"type": "error", "reason": reason, "message": MESSAGES[reason]})]),
                                               media_type="text/event-stream"), sid)
 
-    if not q or len(q) > MAX_CHARS:
+    if not q:
+        return refuse("empty")
+    if len(q) > MAX_CHARS:
         return refuse("too_long")
     if s["turns"] >= MAX_TURNS:
         return refuse("turns")

@@ -150,6 +150,14 @@ const $ = (s) => document.querySelector(s);
 const chat = $("#chat"), form = $("#form"), q = $("#q"), send = $("#send");
 let busy = false, turnstileToken = null;
 
+// Visitor id sent as a header: cookies are often blocked when the page is framed by another site.
+const SID = (() => {
+  const fresh = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()).replace(/[^A-Za-z0-9]/g, "");
+  try { let s = localStorage.getItem("sid"); if (!s) { s = fresh(); localStorage.setItem("sid", s); } return s; }
+  catch { return fresh(); }
+})();
+const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...(opts.headers || {}), "X-Session-Id": SID } });
+
 // ---------- rendering ----------
 const CITE = /\[((?:NCT\d{8}|PMC\d{5,9})(?:\s*[,;]\s*(?:NCT\d{8}|PMC\d{5,9}))*)\]/g;
 function citeLinks(md) {
@@ -222,7 +230,7 @@ fetch("/static/examples.json").then((r) => r.json()).then((examples) => {
 
 // ---------- status / limits ----------
 async function refreshStatus() {
-  const s = await fetch("/api/status").then((r) => r.json());
+  const s = await api("/api/status").then((r) => r.json());
   $("#quota").textContent = s.open ? `${s.remaining_today} question${s.remaining_today === 1 ? "" : "s"} left today` : "Today's demo limit is reached; examples still work";
   if (s.turnstile_site_key && !window.turnstileLoaded) {
     window.turnstileLoaded = true;
@@ -237,7 +245,7 @@ refreshStatus();
 // ---------- asking ----------
 q.addEventListener("input", () => { $("#count").textContent = q.value.length; q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 160) + "px"; });
 q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
-$("#new").onclick = async () => { await fetch("/api/reset", { method: "POST" }); chat.innerHTML = ""; refreshStatus(); };
+$("#new").onclick = async () => { await api("/api/reset", { method: "POST" }); chat.innerHTML = ""; refreshStatus(); };
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -255,7 +263,7 @@ form.addEventListener("submit", async (e) => {
   const addStep = (label) => { live.classList.remove("live"); live = el("div", "step live", label); status.appendChild(live); };
 
   try {
-    const resp = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, turnstile_token: turnstileToken }) });
+    const resp = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, turnstile_token: turnstileToken }) });
     const reader = resp.body.getReader(), dec = new TextDecoder();
     let buf = "";
     for (;;) {
