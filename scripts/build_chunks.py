@@ -201,6 +201,25 @@ def paper_chunks(pmcid, ncts, meta):
     return chunks
 
 
+NCT_RE = re.compile(r"NCT\d{8}")
+
+
+def trial_links(pmcid, registry_links, known):
+    """Decide which trials a paper reports. Registries sometimes list another trial's paper as
+    their 'result' (e.g. a cepharanthine trial citing the Paxlovid EPIC-HR paper), so the
+    registration ID the paper itself states (abstract, front matter, 'registered' sentences) wins."""
+    art = etree.parse(str(DATA / "pmc" / f"{pmcid}.xml"), etree.XMLParser(recover=True, huge_tree=True)).getroot()
+    meta = art.find(".//article-meta")
+    front = text_of(meta) if meta is not None else ""
+    full = text_of(art)
+    reg_sentences = " ".join(s for s in re.split(r"(?<=[.;])\s+", full) if re.search(r"regist|clinicaltrials\.gov", s, re.I))
+    own = set(NCT_RE.findall(front + " " + reg_sentences)) & known
+    mentioned = set(NCT_RE.findall(full))
+    if own:
+        return own | (registry_links & mentioned)
+    return (registry_links & mentioned) or registry_links
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -211,9 +230,15 @@ def main():
         trials.append(t); chunks += c
     n_registry = len(chunks)
 
-    paper_ncts = collections.defaultdict(set)
+    linked = collections.defaultdict(set)
     for r in json.loads((DATA / "trial_papers.json").read_text()):
-        if r.get("oa"): paper_ncts[r["pmcid"]].add(r["nct"])
+        if r.get("oa"): linked[r["pmcid"]].add(r["nct"])
+    known = {t["nct"] for t in trials}
+    paper_ncts, relinked = {}, 0
+    for pmcid, reg in linked.items():
+        paper_ncts[pmcid] = trial_links(pmcid, reg, known)
+        relinked += paper_ncts[pmcid] != reg
+    print(f"papers whose trial links changed after checking the paper's own registration IDs: {relinked} of {len(linked)}")
     for t in trials:
         t["pmcids"] = sorted(pm for pm, ns in paper_ncts.items() if t["nct"] in ns)
     failed = []
