@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir torch==2.9.1 --index-url https://download.pytorch
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# WORKDIR was created by root; the app runs as `user` and must be able to write data/ (database + usage.db)
+RUN mkdir -p /home/user/app/data && chown -R user:user /home/user/app
 USER user
 ENV HOME=/home/user \
     HF_HOME=/home/user/.cache/huggingface \
