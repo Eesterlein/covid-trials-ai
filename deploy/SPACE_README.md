@@ -6,7 +6,7 @@ colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: COVID-19 answers from 10,269 clinical trials, every claim cited
+short_description: COVID-19 answers from 10,269 trials, every claim cited
 ---
 
 # COVID Trials AI
