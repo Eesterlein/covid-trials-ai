@@ -5,7 +5,7 @@ A chat assistant that answers questions about COVID-19 from the clinical trial e
 claim in an answer links to the trial record or paper it came from, and any statistics (risk
 ratios, pooled estimates, numbers needed to treat) are computed in code, with the code shown.
 
-**Live demo:** _coming soon on Hugging Face Spaces_
+**Live demo:** [huggingface.co/spaces/Eesterlein/covid-trials-ai](https://huggingface.co/spaces/Eesterlein/covid-trials-ai)
 
 Research information, not medical advice.
 
